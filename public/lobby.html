@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lobby Chat</title>
+  <style>
+    #chat { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 5px; display: none; }
+    #messageInput { width: 80%; }
+    #joinForm { margin-bottom: 20px; }
+  </style>
+  <!-- Include PeerJS from CDN -->
+  <script src="https://unpkg.com/peerjs@1.3.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <h1>Lobby Chat</h1>
+  <div id="lobbyId"></div>
+  
+  <!-- Form to enter a display name -->
+  <div id="joinForm">
+    <input type="text" id="usernameInput" placeholder="Enter your name" />
+    <button id="joinButton">Join Chat</button>
+  </div>
+
+  <!-- Chat Area -->
+  <div id="chat"></div>
+  <div id="chatControls" style="display: none;">
+    <input type="text" id="messageInput" placeholder="Type your message" />
+    <button id="sendButton">Send</button>
+  </div>
+
+  <script>
+    // Helper: Get query parameter by name.
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
+
+    // Extract lobby code from URL (assumes URL like /lobby/ABCDE).
+    const pathParts = window.location.pathname.split('/');
+    const lobbyCode = pathParts[pathParts.length - 1];
+    document.getElementById('lobbyId').innerText = 'Lobby Code: ' + lobbyCode;
+
+    // Determine the role from the query parameter.
+    const role = getQueryParam('role'); // "host" or "join"
+
+    let username = '';
+    let peer;
+    let hostConnection; // For joiners.
+    let connections = []; // For host: store connections from joiners.
+
+    // Initialize PeerJS.
+    if (role === 'host') {
+      // Host uses the lobby code as its peer ID.
+      peer = new Peer(lobbyCode);
+      console.log("Hosting lobby with ID:", lobbyCode);
+
+      // Listen for incoming connections from joiners.
+      peer.on('connection', (conn) => {
+        console.log('New connection from:', conn.peer);
+        connections.push(conn);
+        conn.on('data', (data) => {
+          // Data structure: { username, message }
+          const msg = data.username + ': ' + data.message;
+          appendMessage(msg);
+          // Relay message to all other connected peers.
+          connections.forEach(c => {
+            if (c !== conn && c.open) {
+              c.send(data);
+            }
+          });
+        });
+      });
+    } else {
+      // For joiners, create a peer with an auto-generated ID.
+      peer = new Peer();
+      peer.on('open', (id) => {
+        console.log("Joiner peer ID:", id);
+        // Connect to the host using the lobby code.
+        hostConnection = peer.connect(lobbyCode);
+        hostConnection.on('open', () => {
+          console.log("Connected to host:", lobbyCode);
+        });
+        hostConnection.on('data', (data) => {
+          const msg = data.username + ': ' + data.message;
+          appendMessage(msg);
+        });
+      });
+    }
+
+    // Helper: Append a message to the chat area.
+    function appendMessage(msg) {
+      const chatDiv = document.getElementById('chat');
+      const msgDiv = document.createElement('div');
+      msgDiv.textContent = msg;
+      chatDiv.appendChild(msgDiv);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    // Handle display name submission.
+    document.getElementById('joinButton').addEventListener('click', () => {
+      username = document.getElementById('usernameInput').value.trim();
+      if (!username) {
+        alert("Please enter your name.");
+        return;
+      }
+      // Hide the join form and show the chat interface.
+      document.getElementById('joinForm').style.display = 'none';
+      document.getElementById('chat').style.display = 'block';
+      document.getElementById('chatControls').style.display = 'block';
+      appendMessage("You joined as " + username);
+    });
+
+    // Function to send chat messages.
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+      if (!message) return;
+      const data = { username: username, message: message };
+      if (role === 'host') {
+        // As host, send the message to all connected peers.
+        connections.forEach(conn => {
+          if (conn.open) {
+            conn.send(data);
+          }
+        });
+      } else {
+        // As a joiner, send the message to the host.
+        if (hostConnection && hostConnection.open) {
+          hostConnection.send(data);
+        }
+      }
+      appendMessage(username + ': ' + message);
+      input.value = '';
+    }
+
+    // Send message when clicking the "Send" button or pressing Enter.
+    document.getElementById('sendButton').addEventListener('click', sendMessage);
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>

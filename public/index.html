@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat App - Main Menu</title>
+</head>
+<body>
+  <h1>Welcome to PeerJS Chat</h1>
+
+  <!-- Host Lobby -->
+  <button id="hostLobby">Host Lobby</button>
+  <br/><br/>
+
+  <!-- Join Lobby -->
+  <input type="text" id="joinLobbyCode" placeholder="Enter Lobby Code" />
+  <button id="joinLobby">Join Lobby</button>
+
+  <script>
+    // When hosting a lobby, generate a unique 5-character code and redirect with role=host.
+    document.getElementById('hostLobby').addEventListener('click', () => {
+      const code = Math.random().toString(36).substring(2, 7).toUpperCase();
+      window.location.href = '/lobby/' + code + '?role=host';
+    });
+
+    // When joining a lobby, use the entered code and redirect with role=join.
+    document.getElementById('joinLobby').addEventListener('click', () => {
+      const code = document.getElementById('joinLobbyCode').value.trim();
+      if (!code) {
+        alert("Please enter a valid lobby code.");
+        return;
+      }
+      window.location.href = '/lobby/' + code + '?role=join';
+    });
+  </script>
+</body>
+</html>
